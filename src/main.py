@@ -1,31 +1,11 @@
-from calendar import weekday
+from twisted.internet import task, reactor
 import copy
-from datetime import datetime, timezone
-from email import message
-import enum
 import json
 import logging
-from operator import index
-from os import kill
-import os
 import random
-from sqlite3 import Time
-from subprocess import call
-from tabnanny import check
-import time
-from tracemalloc import BaseFilter
-from xml.etree.ElementPath import get_parent_map
-from click import get_current_context
-from numpy import broadcast, full
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackQueryHandler
+from telegram.ext import Updater, CommandHandler
 from env import get_api_key, get_port
 from telebot import types, telebot
-from telegram import CallbackQuery, ParseMode
-import ast
-from dbhelper import DBHelper, DBKeysMap, factionDataKeys, playerDataKeys
-import pandas
-import atexit
-from twisted.internet import task, reactor
 from listDict import ListDict
 from prize import Prize
 
@@ -45,32 +25,75 @@ bot = telebot.TeleBot(API_KEY, parse_mode=None)
 
 # ============================Constants======================================
 
-# TODO: UPDATE
-admins = ["praveeeenk", "Casperplz", "Jobeet"]
-numOfPrizes = 5
-numBlanksToAddUponPlay = numOfPrizes // 2
+admins = ["praveeeenk", "Casperplz", "Jobeet", "vigonometry", "kelsykoh", "kelsomebody"]
+# allPrizes = ListDict()
 availablePrizes = ListDict()
-for i in range(1, numOfPrizes + 1):
-    #TODO: Change to Actual Names, load from EXCEL
-    newPrize = Prize(i, f"Prize Name {i}")
-    availablePrizes.add_item(newPrize)
+playerTracker = {}
 
 
 # =============================Texts==========================================
 dontWasteMyTimeText = """\"Don't waste my time...You aren't allowed to use this command now.\"
 ~ Message by Caserplz"""
 
-# ======================LOAD GAME STATE================================
-# Load Database
-mainDb = DBHelper("oldHCEvent.sqlite")
-# Clear DB first, then setup
-# mainDb.purgeData()
-# mainDb.setup()
-# mainDb.playerDataJSONArrToDB(playerDataRound1JSONArr, 1)
-# mainDb.playerDataJSONArrToDB(playerDataRound2JSONArr, 2)
-# mainDb.factionDataJSONArrToDB(factionDataJSONArr)
+# ======================Storage Functions================================
+def loadGameState():
+    global playerTracker
+    with open('data.json', 'r') as prizes_file:
+        prizes_data = json.load(prizes_file)
+    
+    for prize in prizes_data["prizes"]:
+        newPrize = Prize(prize["id"], prize["name"])
+        if prize["heldBy"]:
+            newPrize.heldBy = prize["heldBy"]
+        # allPrizes.add_item(newPrize)
+        availablePrizes.add_item(newPrize)
+    
+    for username, tracker in prizes_data["playerTracker"].items():
+        player_object = {
+            "prize": None
+        }
+        if tracker["prize"]:
+            json_prize_object = tracker["prize"]
+            player_prize = Prize(json_prize_object["id"], json_prize_object["name"])
+            player_prize.heldBy = username
+            player_object["prize"] = player_prize
+        playerTracker[username] = player_object
+    
+    logger.info("Loaded Game State---------------------------------------------------------------")
+    for username, tracker in playerTracker.items():
+        prize_string = "null"
+        if tracker["prize"]:
+            prize_string = str(tracker["prize"].toJSON())
+        logger.info(username + ": " + prize_string)
+    
+    for prize in availablePrizes.items:
+        heldBy = prize.heldBy
+        if not heldBy:
+            heldBy = "null"
+        logger.info(str(prize.id) + ", " + prize.name + ", " + heldBy)
 
-playerTracker = {}
+def saveGameState():
+    storage_json_object = {}
+    player_tracker_json_object = {}
+    for key, value in playerTracker.items():
+        player_json_object = {
+            "prize": None
+        }
+        if value["prize"]:
+            player_json_object["prize"] = value["prize"].toJSON()
+        player_tracker_json_object[key] = player_json_object
+    storage_json_object["playerTracker"] = player_tracker_json_object
+    
+    prizes_array = []
+    for prize in availablePrizes.items:
+        prizes_array.append(prize.toJSON())
+    storage_json_object["prizes"] = prizes_array
+    with open('data.json', 'w') as prizes_file:
+        json.dump(storage_json_object, prizes_file)
+
+    logger.info("Stored Game State---------------------------------------------------------------")
+    logger.info(storage_json_object)
+
 
 # ============================Key boards===================================
 # Makes Inline Keyboard
@@ -81,67 +104,6 @@ def makeInlineKeyboard(lst, optionID):
         markup.add(types.InlineKeyboardButton(text=value,
                                               callback_data=f"['optionID', '{optionID}', 'value', '{value}']"))
     return markup
-
-# ============================DB to file converters?===========================
-
-# def saveGameState():
-#     db = DBHelper("shan-royale.sqlite")
-#     currentTime = datetime.now().strftime("%d-%m-%Y_%H-%M-%S")
-#     print(f"SAVING GAME STATE AT: {currentTime}")
-#     allPlayerData1Dict = db.getALLPlayerDataJSON(1)
-#     allPlayerData2Dict = db.getALLPlayerDataJSON(2)
-#     allFactionDataDict = db.getALLFactionDataJSON()
-    
-#     gameDataDict = {}
-#     dummyDict = {}
-#     for key in gameDataKeys.allKeys:
-#         dummyDict[key] = getattr(currentGame, key)
-#     gameDataDict["game"] = dummyDict
-
-#     dummyTrackerDict = {}
-#     for username, dictionary in userTracker.items():
-#         temp = {}
-#         temp[userTrackerDataKeys.username] = username
-#         for key, value in dictionary.items():
-#             temp[key] = value
-#         dummyTrackerDict[username] = temp
-
-#     dummyAdminDict = {}
-#     for username, dictionary in adminQuery.items():
-#         temp = {}
-#         for state, text in dictionary.items():
-#             temp[adminQueryDataKeys.username] = username
-#             temp[adminQueryDataKeys.state] = state
-#             temp[adminQueryDataKeys.text] = text
-#         dummyAdminDict[username] = temp
-
-#     allPlayerData1JSON = pandas.DataFrame.from_dict(allPlayerData1Dict, orient="index")
-#     allPlayerData2JSON = pandas.DataFrame.from_dict(allPlayerData2Dict, orient="index")
-#     allFactionDataJSON = pandas.DataFrame.from_dict(allFactionDataDict, orient="index")
-#     gameDataJSON = pandas.DataFrame.from_dict(gameDataDict, orient="index")
-#     userTrackerJSON = pandas.DataFrame.from_dict(dummyTrackerDict, orient="index")
-#     adminQueryJSON = pandas.DataFrame.from_dict(dummyAdminDict, orient="index")
-
-#     # Save to backup sheet
-#     saveBackupFilePath = f"./excel/backup/shanRoyale2022-{currentTime}.xlsx"
-#     with pandas.ExcelWriter(saveBackupFilePath) as writer:
-#         allPlayerData1JSON.to_excel(writer, sheet_name=SheetName.playerDataRound1)
-#         allPlayerData2JSON.to_excel(writer, sheet_name=SheetName.playerDataRound2)
-#         allFactionDataJSON.to_excel(writer, sheet_name=SheetName.factionData)
-#         gameDataJSON.to_excel(writer, sheet_name=SheetName.gameData)
-#         userTrackerJSON.to_excel(writer, sheet_name=SheetName.userTrackerData)
-#         adminQueryJSON.to_excel(writer, sheet_name=SheetName.adminQueryData)
-
-#     # Save to live excel sheet too
-#     with pandas.ExcelWriter(liveExcelFilePath) as writer:
-#         allPlayerData1JSON.to_excel(writer, sheet_name=SheetName.playerDataRound1)
-#         allPlayerData2JSON.to_excel(writer, sheet_name=SheetName.playerDataRound2)
-#         allFactionDataJSON.to_excel(writer, sheet_name=SheetName.factionData)
-#         gameDataJSON.to_excel(writer, sheet_name=SheetName.gameData)
-#         userTrackerJSON.to_excel(writer, sheet_name=SheetName.userTrackerData)
-#         adminQueryJSON.to_excel(writer, sheet_name=SheetName.adminQueryData)
-
-#     print(f"DONE SAVING GAME STATE")
 
 # ====================Other helpers=========================
 
@@ -165,7 +127,6 @@ def startCmd(update, context):
             text="You are already registered!\n\n" + dontWasteMyTimeText)
         return
     newPlayer = {
-        "numBlanks": 0,
         "prize": None
     }
     playerTracker[username] = newPlayer
@@ -192,25 +153,29 @@ def dipCmd(update, context):
     
     player = playerTracker[playerUsername]
     drawnPrize = availablePrizes.choose_random_item()
-    numPrizesAndBlanks = availablePrizes.size() + player["numBlanks"]
-    player["numBlanks"] += numBlanksToAddUponPlay
+    numPrizesAndBlanks = availablePrizes.size() * 2
 
-    # See if player drew blank
-    selectedID = random.randint(1, numPrizesAndBlanks)
-    print(f"SelectedID: {selectedID}, availablePrizes Size: {availablePrizes.size()}")
-    if selectedID > availablePrizes.size(): 
-        currentPrize = player["prize"]
-        bot.send_message(chat_id=chat_id, text=f"Player draw a blank!\n\nTheir prize does not change, so their current prize will still be '{currentPrize.name}' (Prize ID {currentPrize.id})")
-        return
-
-    # If player didnt draw blank
-    availablePrizes.remove_item(drawnPrize)
-    drawnPrize.heldBy = adminUsername
+    # See if player is already holding onto a prize
     if player["prize"]:
-        # Swap prizes
+        # See if player drew blank
+        selectedID = random.randint(1, numPrizesAndBlanks)
+        print(f"SelectedID: {selectedID}, availablePrizes Size: {availablePrizes.size()}")
+        if selectedID > availablePrizes.size():
+            removedPrize = player["prize"]
+            availablePrizes.add_item(removedPrize)
+            removedPrize.heldBy = None
+            player["prize"] = None
+            bot.send_message(chat_id=chat_id, text=f"Player draw a blank!\n\nYou lost your prize ;(")
+            return
+        
+        # If not blank, remove their current prize first
         removedPrize = player["prize"]
         availablePrizes.add_item(removedPrize)
         removedPrize.heldBy = None
+
+    # Draw prize and give player
+    availablePrizes.remove_item(drawnPrize)
+    drawnPrize.heldBy = adminUsername
     player["prize"] = drawnPrize
     bot.send_message(chat_id=chat_id, text=f"Player now has '{drawnPrize.name}' (Prize ID {drawnPrize.id})")
     print(playerTracker)
@@ -264,9 +229,14 @@ def printTakenPrizes(chat_id):
         fullText += f"\nTotal Number of Taken Prizes: {i}"
     bot.send_message(chat_id=chat_id, text=fullText)
 
+# TODO: This is too long
 def peekPrizesCmd(update, context):
     username = update.message.chat.username
     chat_id = update.message.chat.id
+    if username not in admins:
+        bot.send_message(chat_id=chat_id,
+            text="Only admins can use this command!\n\n" + dontWasteMyTimeText)
+        return
     if username not in playerTracker:
         bot.send_message(chat_id=chat_id,
             text="Player hasn't registered yet :(\n\nPress /start")
@@ -278,6 +248,9 @@ def peekPrizesCmd(update, context):
 # ===================Main Method============================
 
 def main():
+
+    # Load Game State
+    loadGameState()
 
     # Start the bot.
     # Create the Updater and pass it your bot's token.
@@ -311,11 +284,11 @@ def main():
     # start_polling() is non-blocking and will stop the bot gracefully.
     updater.start_polling()
 
-    # Save Excel sheet every 90s
-    # timeout = 60
-    # l = task.LoopingCall(saveGameState)
-    # l.start(timeout)
-    # reactor.run()
+    # Save json file every 30s
+    timeout = 30
+    l = task.LoopingCall(saveGameState)
+    l.start(timeout)
+    reactor.run()
 
 
 if __name__ == '__main__':
