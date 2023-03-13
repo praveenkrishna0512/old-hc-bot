@@ -210,28 +210,40 @@ def printAvailablePrizes(chat_id):
     copyOfAvailablePrizes = copy.deepcopy(availablePrizes.items)
     copyOfAvailablePrizes.sort(key=lambda prize: prize.id)
     bot.send_message(chat_id=chat_id, text=start_text)
+    msg_count = 0
+    prize_text = ""
     for prize in copyOfAvailablePrizes:
-        prize_text = f"{prize.name} (ID. {prize.id}) (Held by: {prize.heldBy})\n"
-        bot.send_message(chat_id=chat_id, text=prize_text)
-    last_text = f"\nTotal Number of Available Prizes: {availablePrizes.size()}"
-    bot.send_message(chat_id=chat_id, text=last_text)
+        prize_text += f"{prize.id}. {prize.name} (ID. {prize.id}) (Held by: {prize.heldBy})\n"
+        msg_count += 1
+        if msg_count == 40:
+            bot.send_message(chat_id=chat_id, text=prize_text)
+            msg_count = 0
+            prize_text = ""
+    prize_text += f"\nTotal Number of Available Prizes: {availablePrizes.size()}"
+    bot.send_message(chat_id=chat_id, text=prize_text)
 
 def printTakenPrizes(chat_id):
     start_text = "Taken Prizes:\n\n"
     bot.send_message(chat_id=chat_id, text=start_text)
     i = 0
+    msg_count = 0
+    prize_text = ""
     for data in playerTracker.values():
         prize = data["prize"]
         if not prize:
             continue
-        prize_text += f"{prize.name} (ID. {prize.id}) (Held by: {prize.heldBy})\n"
-        bot.send_message(chat_id=chat_id, text=prize_text)
+        prize_text += f"{prize.id}. {prize.name} (ID. {prize.id}) (Held by: {prize.heldBy})\n"
+        msg_count += 1
+        if msg_count == 40:
+            bot.send_message(chat_id=chat_id, text=prize_text)
+            msg_count = 0
+            prize_text = ""
         i += 1
     if i == 0:
-        last_text = "No prizes have been taken yet!"
+        prize_text += "No prizes have been taken yet!"
     else:
-        last_text = f"\nTotal Number of Taken Prizes: {i}"
-    bot.send_message(chat_id=chat_id, text=last_text)
+        prize_text += f"\nTotal Number of Taken Prizes: {i}"
+    bot.send_message(chat_id=chat_id, text=prize_text)
 
 # TODO: This is too long
 def peekPrizesCmd(update, context):
