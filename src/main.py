@@ -199,35 +199,39 @@ def peekPlayerCmd(update, context):
             text="Player hasn't registered yet :(\n\nDid you type in the correct username?\n\nMake sure you remove the @ before typing in the username")
         return
     prize = playerTracker[playerUsername]["prize"]
-    if prize == 0:
+    if not prize:
         bot.send_message(chat_id=chat_id, text=f"Player hasn't won a prize yet!")
         return
     bot.send_message(chat_id=chat_id, text=f"Player now has '{prize.name}' (Prize ID {prize.id})")
     print(playerTracker)
 
 def printAvailablePrizes(chat_id):
-    fullText = "Available Prizes:\n\n"
+    start_text = "Available Prizes:\n\n"
     copyOfAvailablePrizes = copy.deepcopy(availablePrizes.items)
     copyOfAvailablePrizes.sort(key=lambda prize: prize.id)
+    bot.send_message(chat_id=chat_id, text=start_text)
     for prize in copyOfAvailablePrizes:
-        fullText += f"{prize.name} (ID. {prize.id}) (Held by: {prize.heldBy})\n"
-    fullText += f"\nTotal Number of Available Prizes: {availablePrizes.size()}"
-    bot.send_message(chat_id=chat_id, text=fullText)
+        prize_text = f"{prize.name} (ID. {prize.id}) (Held by: {prize.heldBy})\n"
+        bot.send_message(chat_id=chat_id, text=prize_text)
+    last_text = f"\nTotal Number of Available Prizes: {availablePrizes.size()}"
+    bot.send_message(chat_id=chat_id, text=last_text)
 
 def printTakenPrizes(chat_id):
-    fullText = "Taken Prizes:\n\n"
+    start_text = "Taken Prizes:\n\n"
+    bot.send_message(chat_id=chat_id, text=start_text)
     i = 0
     for data in playerTracker.values():
         prize = data["prize"]
         if not prize:
             continue
-        fullText += f"{prize.name} (ID. {prize.id}) (Held by: {prize.heldBy})\n"
+        prize_text += f"{prize.name} (ID. {prize.id}) (Held by: {prize.heldBy})\n"
+        bot.send_message(chat_id=chat_id, text=prize_text)
         i += 1
     if i == 0:
-        fullText += "No prizes have been taken yet!"
+        last_text = "No prizes have been taken yet!"
     else:
-        fullText += f"\nTotal Number of Taken Prizes: {i}"
-    bot.send_message(chat_id=chat_id, text=fullText)
+        last_text = f"\nTotal Number of Taken Prizes: {i}"
+    bot.send_message(chat_id=chat_id, text=last_text)
 
 # TODO: This is too long
 def peekPrizesCmd(update, context):
