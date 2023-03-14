@@ -25,7 +25,7 @@ bot = telebot.TeleBot(API_KEY, parse_mode=None)
 
 # ============================Constants======================================
 
-admins = ["praveeeenk", "Casperplz", "Jobeet", "vigonometry", "kelsykoh", "kelsomebody"]
+admins = ["praveeeenk", "Casperplz", "Jobeet", "vigonometry", "kelsykoh", "kelsomebody", "keziakhoo", "itsyelsew", "buttermebuns"]
 # allPrizes = ListDict()
 availablePrizes = ListDict()
 playerTracker = {}
@@ -36,9 +36,14 @@ dontWasteMyTimeText = """\"Don't waste my time...You aren't allowed to use this 
 ~ Message by Caserplz"""
 
 # ======================Storage Functions================================
-def loadGameState():
-    global playerTracker
-    with open('data.json', 'r') as prizes_file:
+def loadGameState(dataFilePath):
+    global playerTracker, availablePrizes
+    
+    # Reset data
+    playerTracker = {}
+    availablePrizes = ListDict()
+
+    with open(dataFilePath, 'r') as prizes_file:
         prizes_data = json.load(prizes_file)
     
     for prize in prizes_data["prizes"]:
@@ -88,8 +93,11 @@ def saveGameState():
     for prize in availablePrizes.items:
         prizes_array.append(prize.toJSON())
     storage_json_object["prizes"] = prizes_array
+    
     with open('data.json', 'w') as prizes_file:
         json.dump(storage_json_object, prizes_file)
+    with open('backup.json', 'w') as backup_file:
+        json.dump(storage_json_object, backup_file)
 
     logger.info("Stored Game State---------------------------------------------------------------")
     logger.info(storage_json_object)
@@ -148,7 +156,7 @@ def dipCmd(update, context):
         return
     if playerUsername not in playerTracker:
         bot.send_message(chat_id=chat_id,
-            text="Player hasn't registered yet :(\n\nDid you type in the correct username?\n\nMake sure you remove the @ before typing in the username")
+            text=f"{playerUsername} hasn't registered yet :( Get them to click /start on their phone again.\n\n Also, did you type in the correct username?\n\nMake sure you remove the @ before typing in the username")
         return
     
     player = playerTracker[playerUsername]
@@ -165,7 +173,7 @@ def dipCmd(update, context):
             availablePrizes.add_item(removedPrize)
             removedPrize.heldBy = None
             player["prize"] = None
-            bot.send_message(chat_id=chat_id, text=f"Player draw a blank!\n\nYou lost your prize ;(")
+            bot.send_message(chat_id=chat_id, text=f"{playerUsername} draw a blank!\n\nYou lost your prize ;(")
             return
         
         # If not blank, remove their current prize first
@@ -177,7 +185,7 @@ def dipCmd(update, context):
     availablePrizes.remove_item(drawnPrize)
     drawnPrize.heldBy = adminUsername
     player["prize"] = drawnPrize
-    bot.send_message(chat_id=chat_id, text=f"Player now has '{drawnPrize.name}' (Prize ID {drawnPrize.id})")
+    bot.send_message(chat_id=chat_id, text=f"{playerUsername} now has '{drawnPrize.name}' (Prize ID {drawnPrize.id})")
     print(playerTracker)
 
 def peekPlayerCmd(update, context):
@@ -196,13 +204,13 @@ def peekPlayerCmd(update, context):
         return
     if playerUsername not in playerTracker:
         bot.send_message(chat_id=chat_id,
-            text="Player hasn't registered yet :(\n\nDid you type in the correct username?\n\nMake sure you remove the @ before typing in the username")
+            text=f"{playerUsername} hasn't registered yet :( Get them to click /start on their phone again.\n\nDid you type in the correct username?\n\nMake sure you remove the @ before typing in the username")
         return
     prize = playerTracker[playerUsername]["prize"]
     if not prize:
-        bot.send_message(chat_id=chat_id, text=f"Player hasn't won a prize yet!")
+        bot.send_message(chat_id=chat_id, text=f"{playerUsername} hasn't won a prize yet!")
         return
-    bot.send_message(chat_id=chat_id, text=f"Player now has '{prize.name}' (Prize ID {prize.id})")
+    bot.send_message(chat_id=chat_id, text=f"{playerUsername} now has '{prize.name}' (Prize ID {prize.id})")
     print(playerTracker)
 
 def printAvailablePrizes(chat_id):
@@ -245,7 +253,6 @@ def printTakenPrizes(chat_id):
         prize_text += f"\nTotal Number of Taken Prizes: {i}"
     bot.send_message(chat_id=chat_id, text=prize_text)
 
-# TODO: This is too long
 def peekPrizesCmd(update, context):
     username = update.message.chat.username
     chat_id = update.message.chat.id
@@ -255,18 +262,29 @@ def peekPrizesCmd(update, context):
         return
     if username not in playerTracker:
         bot.send_message(chat_id=chat_id,
-            text="Player hasn't registered yet :(\n\nPress /start")
+            text=f"{username} hasn't registered yet :(\n\nPress /start")
         return
     printAvailablePrizes(chat_id=chat_id)
     printTakenPrizes(chat_id=chat_id)
     print(playerTracker)
+
+def resetCmd(update, context):
+    username = update.message.chat.username
+    chat_id = update.message.chat.id
+    if not (username == "praveeeenk"):
+        bot.send_message(chat_id=chat_id,
+            text="Only Praveen can use this command!\n\n" + dontWasteMyTimeText)
+        return
+    loadGameState('reset-data.json')
+    bot.send_message(chat_id=chat_id,
+            text="Reset Complete")
 
 # ===================Main Method============================
 
 def main():
 
     # Load Game State
-    loadGameState()
+    loadGameState(dataFilePath='data.json')
 
     # Start the bot.
     # Create the Updater and pass it your bot's token.
@@ -276,6 +294,9 @@ def main():
 
     # Get the dispatcher to register handlers
     dp = updater.dispatcher
+
+    # praveen only commands
+    dp.add_handler(CommandHandler("reset", resetCmd))
 
     # Game Master commands
     dp.add_handler(CommandHandler("dip", dipCmd))
