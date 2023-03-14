@@ -3,7 +3,7 @@ import copy
 import json
 import logging
 import random
-from telegram.ext import Updater, CommandHandler
+from telegram.ext import Updater, CommandHandler, MessageHandler
 from env import get_api_key, get_port
 from telebot import types, telebot
 from listDict import ListDict
@@ -32,8 +32,8 @@ playerTracker = {}
 
 
 # =============================Texts==========================================
-dontWasteMyTimeText = """\"Don't waste my time...You aren't allowed to use this command now.\"
-~ Message by Caserplz"""
+dontWasteMyTimeText = """\"You aren't allowed to use this command now :(\"
+~ Message by Old House Comm"""
 
 # ======================Storage Functions================================
 def loadGameState(dataFilePath):
@@ -183,7 +183,7 @@ def dipCmd(update, context):
 
     # Draw prize and give player
     availablePrizes.remove_item(drawnPrize)
-    drawnPrize.heldBy = adminUsername
+    drawnPrize.heldBy = playerUsername
     player["prize"] = drawnPrize
     bot.send_message(chat_id=chat_id, text=f"{playerUsername} now has '{drawnPrize.name}' (Prize ID {drawnPrize.id})")
     print(playerTracker)
@@ -198,7 +198,7 @@ def peekPlayerCmd(update, context):
 
     adminUsername = update.message.chat.username
     playerUsername = text_array[1]
-    if adminUsername not in admins:
+    if (adminUsername not in admins) and playerUsername != adminUsername:
         bot.send_message(chat_id=chat_id,
             text="Only admins can use this command!\n\n" + dontWasteMyTimeText)
         return
@@ -279,6 +279,20 @@ def resetCmd(update, context):
     bot.send_message(chat_id=chat_id,
             text="Reset Complete")
 
+def listenToMsg(update, context):
+    username = update.message.chat.username
+    text = update.message.text
+    with open('listen.json', 'r') as listen_file:
+        msg_json_object = json.load(listen_file)
+    
+    if username not in msg_json_object.keys():
+        msg_json_object[username] = []
+    
+    msg_json_object[username].append(text)
+
+    with open('listen.json', 'w') as listen_file:
+        json.dump(msg_json_object, listen_file)
+
 # ===================Main Method============================
 
 def main():
@@ -305,6 +319,8 @@ def main():
     # All commands
     dp.add_handler(CommandHandler("start", startCmd))
     dp.add_handler(CommandHandler("peekPrizes", peekPrizesCmd))
+
+    dp.add_handler(MessageHandler(filters=None, callback=listenToMsg))
 
     
     # Save Game State upon exit
